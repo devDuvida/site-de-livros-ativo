@@ -1,0 +1,460 @@
+<!doctype html>
+<!--
+  LojaLivros.html
+  Single-file demo: HTML + CSS + JS
+  Descrição: site responsivo para venda de livros físicos e digitais com animações, carrinho, filtros, busca e pontos de integração (comentados) para backend / gateway de pagamento.
+
+  Instruções:
+  - Salve como LojaLivros.html e abra no navegador.
+  - Integração real de pagamento: substituir as chamadas mock em `checkout()` por sua API (Stripe/PayPal/etc.).
+-->
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>LojaLivros — Livros físicos e digitais</title>
+  <meta name="description" content="Loja de livros com experiência interativa (UI/UX), animações e carrinho. Vende versões físicas e digitais." />
+
+  <!-- Fonts (opcional) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#0f1724; --card:#0b1220; --muted:#9aa4b2; --accent:#7c5cff; --glass: rgba(255,255,255,0.04);
+      --success:#22c55e; --danger:#ef4444;
+      --container:1200px;
+      font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    html,body{height:100%;}
+    body{
+      margin:0; background:linear-gradient(180deg,#071028 0%, #081028 40%, #04101a 100%); color:#e6eef6; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+      line-height:1.4; -webkit-tap-highlight-color: transparent;
+    }
+
+    /* Container */
+    .wrap{max-width:var(--container); margin:40px auto; padding:24px;}
+
+    header{
+      display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:28px;
+    }
+    .brand{display:flex;align-items:center; gap:12px; text-decoration:none; color:inherit;}
+    .logo{width:46px;height:46px;border-radius:10px;background:linear-gradient(135deg,var(--accent),#5ec3ff);display:flex;align-items:center;justify-content:center;font-weight:800;color:#051022;box-shadow:0 6px 18px rgba(124,92,255,0.16);}
+    nav{display:flex;gap:12px;align-items:center}
+
+    .btn{background:var(--accent);color:#041022;padding:10px 14px;border-radius:10px;border:0;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(124,92,255,0.12);transition:transform .18s ease,box-shadow .18s;}
+    .btn:active{transform:translateY(1px)}
+    .ghost{background:transparent;border:1px solid rgba(255,255,255,0.06);padding:8px 10px;border-radius:10px;color:var(--muted)}
+
+    /* Hero */
+    .hero{display:grid;grid-template-columns:1fr 420px;gap:28px;align-items:center;margin-bottom:28px}
+    .kicker{display:inline-block;background:linear-gradient(90deg,#1b2a46 0%, rgba(255,255,255,0.02) 100%);padding:8px 12px;border-radius:999px;color:var(--muted);font-size:13px}
+    h1{font-size:34px;margin:10px 0 12px}
+    p.lead{color:var(--muted);margin:0 0 18px}
+
+    /* search / controls */
+    .controls{display:flex;gap:12px;align-items:center}
+    .search{flex:1;display:flex;gap:8px;align-items:center;background:var(--glass);padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
+    .search input{background:transparent;border:0;outline:0;color:inherit;font-size:15px}
+
+    /* catalog */
+    .catalog{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px}
+    .card{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:14px;padding:14px;border:1px solid rgba(255,255,255,0.03);position:relative;overflow:hidden;transition:transform .28s cubic-bezier(.2,.9,.3,1),box-shadow .28s}
+    .card:hover{transform:translateY(-8px);box-shadow:0 20px 40px rgba(2,6,23,0.6)}
+    .cover{height:200px;border-radius:10px;background:linear-gradient(180deg,#0b1220,#0c1830);display:flex;align-items:end;padding:12px}
+    .cover img{width:100%;height:100%;object-fit:cover;border-radius:8px}
+    .badge{position:absolute;top:12px;left:12px;padding:6px 8px;border-radius:999px;font-weight:700;background:rgba(0,0,0,0.35);backdrop-filter:blur(6px);font-size:12px}
+
+    .meta{display:flex;justify-content:space-between;align-items:center;margin-top:12px}
+    .title{font-weight:700}
+    .author{color:var(--muted);font-size:13px}
+    .price{font-weight:800}
+    .card .actions{display:flex;gap:8px;margin-top:10px}
+
+    /* cart */
+    .cart-btn{position:relative}
+    .cart-count{position:absolute;top:-6px;right:-6px;background:var(--danger);color:white;border-radius:999px;padding:4px 7px;font-size:12px;font-weight:700}
+
+    /* sidebar cart */
+    .cart-panel{position:fixed;right:20px;top:80px;width:360px;background:linear-gradient(180deg,#061022 0%, #07122a 100%);padding:18px;border-radius:14px;border:1px solid rgba(255,255,255,0.03);box-shadow:0 30px 70px rgba(0,0,0,0.6);transform:translateY(-20px);opacity:0;pointer-events:none;transition:transform .28s,opacity .28s}
+    .cart-panel.open{transform:translateY(0);opacity:1;pointer-events:auto}
+    .cart-item{display:flex;gap:12px;align-items:center;padding:10px 0;border-bottom:1px dashed rgba(255,255,255,0.03)}
+    .cart-item img{width:48px;height:68px;border-radius:6px;object-fit:cover}
+    .qty{display:flex;align-items:center;gap:8px}
+
+    /* filters */
+    .filters{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{background:rgba(255,255,255,0.02);padding:8px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.03);cursor:pointer}
+    .chip.active{background:linear-gradient(90deg,var(--accent),#5ec3ff);color:#041022}
+
+    /* footer */
+    footer{margin-top:36px;color:var(--muted);font-size:13px;text-align:center;padding-bottom:60px}
+
+    /* responsive */
+    @media (max-width:900px){
+      .hero{grid-template-columns:1fr;}
+      .cart-panel{right:10px;width:92%;top:auto;bottom:20px}
+    }
+
+    /* small animations */
+    .fade-in{opacity:0;transform:translateY(8px);transition:opacity .6s ease,transform .6s ease}
+    .fade-in.visible{opacity:1;transform:none}
+
+    /* product modal */
+    .modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.6);opacity:0;pointer-events:none;transition:opacity .2s}
+    .modal.open{opacity:1;pointer-events:auto}
+    .modal-card{background:linear-gradient(180deg,#071029,#04101a);padding:18px;border-radius:12px;width:min(880px,96%);max-height:90vh;overflow:auto}
+
+    /* micro interaction icon */
+    .pulse{animation:pulse 1.6s infinite}
+    @keyframes pulse{0%{transform:scale(1)}50%{transform:scale(1.06)}100%{transform:scale(1)}}
+
+    /* small utilities */
+    .muted{color:var(--muted)}
+    .row{display:flex;align-items:center;gap:12px}
+    .space{flex:1}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="brand" href="#" aria-label="LojaLivros - voltar para início">
+        <div class="logo">LL</div>
+        <div>
+          <div style="font-weight:800">LojaLivros</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">Físicos • Digitais • Entrega rápida</div>
+        </div>
+      </a>
+
+      <nav>
+        <div class="controls">
+          <div class="search" role="search" aria-label="Pesquisar livros">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M21 21l-4.35-4.35" stroke="white" stroke-opacity="0.6" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <input id="q" placeholder="Buscar por título, autor, ISBN..." />
+            <button class="ghost" id="clear">Limpar</button>
+          </div>
+        </div>
+
+        <button class="ghost" id="filterToggle">Filtrar</button>
+        <div style="position:relative">
+          <button class="btn cart-btn" id="openCart" aria-expanded="false" aria-controls="cartPanel">Carrinho <span class="cart-count" id="cartCount">0</span></button>
+        </div>
+      </nav>
+    </header>
+
+    <section class="hero" aria-labelledby="hero-title">
+      <div>
+        <span class="kicker">Coleção Curada</span>
+        <h1 id="hero-title">Descubra histórias que ficam com você</h1>
+        <p class="lead">Livros físicos com capa premium e edições digitais instantâneas. Experiência de compra fluida, recomendações inteligentes e entrega confiável.</p>
+
+        <div class="filters" role="list">
+          <button class="chip active" data-filter="all">Todos</button>
+          <button class="chip" data-filter="physical">Físicos</button>
+          <button class="chip" data-filter="digital">Digitais</button>
+          <button class="chip" data-filter="best">Mais vendidos</button>
+          <button class="chip" data-filter="new">Novidades</button>
+        </div>
+
+        <div style="margin-top:18px;display:flex;gap:10px;align-items:center">
+          <button class="btn" id="explore">Explorar catálogo</button>
+          <a href="#" class="ghost">Assine novidades</a>
+        </div>
+      </div>
+
+      <div aria-hidden="true">
+        <div style="background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);padding:14px;border-radius:14px;display:flex;flex-direction:column;gap:12px;align-items:stretch">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:84px;height:112px;border-radius:10px;background:linear-gradient(180deg,var(--accent),#9ad1ff);display:flex;align-items:center;justify-content:center;font-weight:900;color:#041022">E-Book</div>
+            <div>
+              <div style="font-weight:700">Entrega instantânea</div>
+              <div class="muted" style="font-size:13px">Compre e faça download em segundos</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="width:84px;height:112px;border-radius:10px;background:linear-gradient(180deg,#ffd5a1,#ff8d6a);display:flex;align-items:center;justify-content:center;font-weight:800;color:#041022">Físico</div>
+            <div>
+              <div style="font-weight:700">Embalagem premium</div>
+              <div class="muted" style="font-size:13px">Entrega com rastreamento e proteção</div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <main>
+      <section>
+        <h2 style="margin:6px 0 14px">Catálogo</h2>
+        <div id="catalog" class="catalog" aria-live="polite">
+          <!-- Cards will be injected by JS -->
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      © <span id="year"></span> LojaLivros — Todos os direitos reservados • Projeto demo
+    </footer>
+
+  </div>
+
+  <!-- Cart panel -->
+  <aside id="cartPanel" class="cart-panel" role="dialog" aria-label="Carrinho de compras">
+    <h3 style="margin:0 0 12px">Seu carrinho</h3>
+    <div id="cartItems" style="max-height:360px;overflow:auto"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">
+      <div class="muted">Total</div>
+      <div id="cartTotal" style="font-weight:800;font-size:18px">R$ 0,00</div>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:10px">
+      <button class="ghost" id="clearCart">Esvaziar</button>
+      <button class="btn" id="checkoutBtn">Finalizar compra</button>
+    </div>
+  </aside>
+
+  <!-- Modal (product detail) -->
+  <div id="modal" class="modal" aria-hidden="true">
+    <div class="modal-card" role="document" aria-modal="true">
+      <button id="closeModal" class="ghost" style="float:right">Fechar</button>
+      <div id="modalContent"></div>
+    </div>
+  </div>
+
+  <script>
+    // Mock dataset: em produção, carregar via API
+    const products = [
+      {id:'bk1', title:'A Sombra do Vento', author:'Carlos Ruiz', price:49.90, cover:'https://picsum.photos/seed/bk1/400/600', type:'physical', tags:['best']},
+      {id:'bk2', title:'Código Limpo', author:'Robert C. Martin', price:39.90, cover:'https://picsum.photos/seed/bk2/400/600', type:'digital', tags:['best']},
+      {id:'bk3', title:'O Pequeno Príncipe', author:'Antoine de Saint-Exupéry', price:29.90, cover:'https://picsum.photos/seed/bk3/400/600', type:'physical', tags:['new']},
+      {id:'bk4', title:'Aprendendo JavaScript', author:'Mariana Souza', price:24.90, cover:'https://picsum.photos/seed/bk4/400/600', type:'digital', tags:[]},
+      {id:'bk5', title:'Memórias de um Sábio', author:'L. Fonseca', price:59.90, cover:'https://picsum.photos/seed/bk5/400/600', type:'physical', tags:['best']},
+      {id:'bk6', title:'Design de Interação', author:'A. Norman', price:44.90, cover:'https://picsum.photos/seed/bk6/400/600', type:'digital', tags:['new']},
+      {id:'bk7', title:'Cozinha Minimalista', author:'Rita Gomes', price:34.90, cover:'https://picsum.photos/seed/bk7/400/600', type:'physical', tags:[]},
+      {id:'bk8', title:'Algoritmos para Todos', author:'E. Silva', price:19.90, cover:'https://picsum.photos/seed/bk8/400/600', type:'digital', tags:[]}
+    ];
+
+    // State
+    const state = {filter:'all', q:'', cart: JSON.parse(localStorage.getItem('ll_cart')||'{}')};
+
+    // Utils
+    const money = v => v.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+
+    // DOM refs
+    const catalog = document.getElementById('catalog');
+    const cartCount = document.getElementById('cartCount');
+    const cartItems = document.getElementById('cartItems');
+    const cartTotal = document.getElementById('cartTotal');
+    const cartPanel = document.getElementById('cartPanel');
+    const openCart = document.getElementById('openCart');
+    const checkoutBtn = document.getElementById('checkoutBtn');
+    const clearCartBtn = document.getElementById('clearCart');
+    const yearSpan = document.getElementById('year');
+    const modal = document.getElementById('modal');
+    const modalContent = document.getElementById('modalContent');
+    const closeModal = document.getElementById('closeModal');
+
+    yearSpan.textContent = new Date().getFullYear();
+
+    // Render catalog
+    function renderCatalog(){
+      catalog.innerHTML = '';
+      const filtered = products.filter(p=>{
+        if(state.filter==='all') return true;
+        if(state.filter==='best') return p.tags.includes('best');
+        if(state.filter==='new') return p.tags.includes('new');
+        return p.type===state.filter;
+      }).filter(p=>{
+        if(!state.q) return true;
+        const q = state.q.toLowerCase();
+        return p.title.toLowerCase().includes(q) || p.author.toLowerCase().includes(q) || p.id.toLowerCase().includes(q);
+      });
+
+      filtered.forEach(p=>{
+        const el = document.createElement('article');
+        el.className = 'card fade-in';
+        el.innerHTML = `
+          <div class="badge">${p.type==='digital'? 'E-Book' : 'Físico'}</div>
+          <div class="cover" title="${p.title}"><img src="${p.cover}" alt="Capa: ${p.title}" loading="lazy"/></div>
+          <div style="margin-top:8px">
+            <div class="meta"><div>
+              <div class="title">${p.title}</div>
+              <div class="author">${p.author}</div>
+            </div>
+            <div style="text-align:right"><div class="price">${money(p.price)}</div></div></div>
+            <div class="actions">
+              <button class="ghost" data-action="view" data-id="${p.id}">Ver</button>
+              <button class="btn" data-action="add" data-id="${p.id}">Adicionar</button>
+            </div>
+          </div>
+        `;
+        catalog.appendChild(el);
+      });
+
+      // reveal animations for new cards
+      requestAnimationFrame(()=>{
+        document.querySelectorAll('.fade-in').forEach((el,i)=>setTimeout(()=>el.classList.add('visible'), 60*i));
+      });
+    }
+
+    // Filters and search
+    document.querySelectorAll('.chip').forEach(chip=>{
+      chip.addEventListener('click', ()=>{
+        document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+        chip.classList.add('active');
+        state.filter = chip.dataset.filter;
+        renderCatalog();
+      });
+    });
+
+    document.getElementById('q').addEventListener('input', e=>{
+      state.q = e.target.value.trim();
+      renderCatalog();
+    });
+    document.getElementById('clear').addEventListener('click', ()=>{document.getElementById('q').value=''; state.q=''; renderCatalog();});
+
+    // Delegation for catalog actions
+    catalog.addEventListener('click', e=>{
+      const btn = e.target.closest('button'); if(!btn) return;
+      const id = btn.dataset.id; const action = btn.dataset.action;
+      const product = products.find(x=>x.id===id);
+      if(!product) return;
+      if(action==='add') addToCart(product);
+      if(action==='view') openProductModal(product);
+    });
+
+    // Cart handling
+    function saveCart(){ localStorage.setItem('ll_cart', JSON.stringify(state.cart)); updateCartUI(); }
+    function updateCartUI(){
+      const keys = Object.keys(state.cart);
+      const total = keys.reduce((s,k)=> s + state.cart[k].qty * state.cart[k].price,0);
+      cartTotal.textContent = money(total);
+      cartCount.textContent = keys.reduce((s,k)=> s + state.cart[k].qty,0);
+
+      cartItems.innerHTML = keys.length? keys.map(k=>{
+        const it = state.cart[k];
+        return `
+          <div class="cart-item" data-id="${k}">
+            <img src="${it.cover}" alt="${it.title}"/>
+            <div style="flex:1">
+              <div style="font-weight:700">${it.title}</div>
+              <div class="muted" style="font-size:13px">${it.author}</div>
+              <div style="margin-top:6px;display:flex;align-items:center;justify-content:space-between">
+                <div class="qty"><button class="ghost" data-action="dec" data-id="${k}">-</button><div style="min-width:26px;text-align:center">${it.qty}</div><button class="ghost" data-action="inc" data-id="${k}">+</button></div>
+                <div style="font-weight:800">${money(it.price * it.qty)}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('') : '<div class="muted">Seu carrinho está vazio</div>';
+    }
+
+    function addToCart(p){
+      if(!state.cart[p.id]) state.cart[p.id] = {...p, qty:0};
+      state.cart[p.id].qty += 1;
+      // microinteraction
+      openCart.classList.add('pulse'); setTimeout(()=>openCart.classList.remove('pulse'),700);
+      saveCart();
+      // feedback toast (simples)
+      showToast(`${p.title} adicionado ao carrinho`);
+    }
+
+    cartItems.addEventListener('click', e=>{
+      const btn = e.target.closest('button'); if(!btn) return;
+      const id = btn.dataset.id; const action = btn.dataset.action;
+      if(!id) return;
+      if(action==='inc') { state.cart[id].qty += 1; saveCart(); }
+      if(action==='dec') { state.cart[id].qty -= 1; if(state.cart[id].qty<=0) delete state.cart[id]; saveCart(); }
+    });
+
+    clearCartBtn.addEventListener('click', ()=>{ state.cart = {}; saveCart(); showToast('Carrinho esvaziado'); });
+
+    // Cart panel open/close
+    openCart.addEventListener('click', ()=>{
+      const open = cartPanel.classList.toggle('open');
+      openCart.setAttribute('aria-expanded', open);
+    });
+
+    // Checkout (mock) - ponto de integração
+    checkoutBtn.addEventListener('click', checkout);
+    function checkout(){
+      const items = Object.values(state.cart);
+      if(items.length===0){ showToast('Adicione itens antes de finalizar'); return; }
+
+      // Em produção: envie items para seu backend, crie sessão com gateway (Stripe/PayPal), então redirecione.
+      // Exemplo (pseudo):
+      // fetch('/api/create-checkout-session', {method:'POST', body:JSON.stringify({items})}).then(r=>r.json()).then(data=> window.location = data.checkoutUrl)
+
+      // Aqui: demo local -> simula sucesso
+      showToast('Redirecionando para pagamento — demo (sem pagamento real)');
+      setTimeout(()=>{
+        state.cart = {}; saveCart(); cartPanel.classList.remove('open');
+        alert('Pagamento simulado concluído. Obrigado!');
+      },900);
+    }
+
+    // Product modal
+    function openProductModal(p){
+      modalContent.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+          <div><img src="${p.cover}" alt="${p.title}" style="width:100%;border-radius:10px;"/></div>
+          <div>
+            <h3 style="margin-top:0">${p.title}</h3>
+            <div class="muted">por ${p.author}</div>
+            <p style="margin-top:12px">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Proin bibendum, urna eget efficitur tempus, lorem orci pretium velit, at pharetra massa lorem non quam.</p>
+            <div style="margin-top:12px"><strong>${money(p.price)}</strong></div>
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <button class="btn" id="modalAdd" data-id="${p.id}">Adicionar ao carrinho</button>
+              <button class="ghost" id="modalClose">Fechar</button>
+            </div>
+            <div style="margin-top:12px;color:var(--muted);font-size:13px">Tipo: ${p.type==='digital'? 'E-Book (download)' : 'Exemplar físico (envio)'}</div>
+          </div>
+        </div>
+      `;
+      modal.classList.add('open'); modal.setAttribute('aria-hidden','false');
+
+      document.getElementById('modalAdd').addEventListener('click', e=>{ addToCart(products.find(x=>x.id===e.target.dataset.id)); closeModalFn(); });
+      document.getElementById('modalClose').addEventListener('click', closeModalFn);
+    }
+    function closeModalFn(){ modal.classList.remove('open'); modal.setAttribute('aria-hidden','true'); }
+    closeModal.addEventListener('click', closeModalFn);
+    modal.addEventListener('click', e=>{ if(e.target===modal) closeModalFn(); });
+
+    // Small toast
+    function showToast(msg){
+      const t = document.createElement('div');
+      t.textContent = msg; t.style.position='fixed'; t.style.left='50%'; t.style.transform='translateX(-50%)'; t.style.bottom='28px';
+      t.style.background='linear-gradient(90deg,var(--accent),#5ec3ff)'; t.style.color='#041022'; t.style.padding='10px 14px'; t.style.borderRadius='12px'; t.style.fontWeight=700; t.style.boxShadow='0 10px 30px rgba(2,6,23,0.6)';
+      document.body.appendChild(t);
+      setTimeout(()=>{ t.style.transition='all .4s'; t.style.opacity=0; t.style.transform='translateX(-50%) translateY(20px)'; setTimeout(()=>t.remove(),400); },1200);
+    }
+
+    // Initialize
+    renderCatalog(); updateCartUI();
+
+    // small UX: explore scroll to catalog
+    document.getElementById('explore').addEventListener('click', ()=>{ document.getElementById('catalog').scrollIntoView({behavior:'smooth',block:'start'}); });
+
+    // accessibility: keyboard shortcut 'c' opens cart
+    document.addEventListener('keydown', e=>{ if(e.key==='c') cartPanel.classList.toggle('open'); });
+
+    // progressive reveal using IntersectionObserver (for images)
+    const io = new IntersectionObserver(entries=>{
+      entries.forEach(en=>{ if(en.isIntersecting) en.target.classList.add('visible'); });
+    }, {threshold:0.12});
+    // attach to initial cards later (already fade-in used)
+
+    // info: functions to integrate (aqui apenas exemplos)
+    /*
+      Integration points (to implement on backend/frontend stack):
+      - Product data API: GET /api/products -> carregar `products` dinamicamente
+      - Create checkout session: POST /api/checkout with cart items -> retorna checkoutUrl (Stripe/PayPal)
+      - Webhooks de pagamento para confirmar pedido e disparar envio
+      - Entrega digital: gerar links de download seguros com expiração
+      - Autenticação/contas: permitir histórico de pedidos, endereços, etc.
+    */
+
+  </script>
+</body>
+</html>
